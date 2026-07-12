@@ -102,6 +102,12 @@ Required columns:
 - Month
 
 ---
+## 🌐 Live Demo
+
+🚀 **Try the application online:**
+
+**SCRB Crime Intelligence Platform**  
+👉 https://scrb-karnataka54.streamlit.app/
 
 
 ## 📸 Screenshots
@@ -133,5 +139,6 @@ Required columns:
 GitHub: https://github.com/Mukesh-179
 
 ---
+
 
 ⭐ **If you found this project useful, consider giving it a Star!**
