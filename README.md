@@ -107,7 +107,7 @@ Required columns:
 🚀 **Try the application online:**
 
 **SCRB Crime Intelligence Platform**  
-👉 https://scrb-karnataka54.streamlit.app/
+👉 https://scrb-karnataka54.streamlit.app/ 
 
 
 ## 📸 Screenshots
