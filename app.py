@@ -18,6 +18,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.charts.barcharts import VerticalBarChart
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from copy import copy
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, LineChart, Reference
 
@@ -26,16 +27,21 @@ st.set_page_config(page_title="SCRB Crime Intelligence Platform", page_icon="�
 
 # ---------------------------------------------------------------- THEME / CSS
 PLOTLY_TEMPLATE = "plotly_dark"
-AMBER, TEAL, RED, BLUE, VIOLET, MUTED = "#ff4d6d", "#2de2e6", "#ff2d55", "#3b82ff", "#8b5cff", "#9fb3d0"
-PALETTE = [RED, BLUE, TEAL, VIOLET, AMBER, "#00f5d4", "#ff8fab", "#5bd3ff", "#ff6b6b", "#6b7cff"]
+AMBER, TEAL, RED, BLUE, VIOLET, MUTED = "#ffb84d", "#72e0b8", "#ff5d6e", "#6f7dff", "#a855f7", "#9fb3d0"
+PALETTE = [VIOLET, RED, BLUE, TEAL, AMBER, "#c084fc", "#f472b6", "#93c5fd", "#a78bfa", "#86efac"]
 
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 html, body, [class*="css"]  { font-family: 'Inter', sans-serif; }
-.main { background-color: #050816; }
-[data-testid="stAppViewContainer"] { background: radial-gradient(ellipse 900px 500px at 85% -10%, rgba(255,45,85,0.18), transparent), radial-gradient(ellipse 900px 500px at 15% 0%, rgba(59,130,255,0.18), transparent), #050816; }
-[data-testid="stSidebar"] { background: linear-gradient(180deg, #0b1228 0%, #080d20 100%); border-right: 1px solid rgba(255,77,109,0.35); }
+.main { background-color: #07060d; }
+[data-testid="stAppViewContainer"] { background:
+    radial-gradient(ellipse 850px 480px at 85% -10%, rgba(168,85,247,0.24), transparent),
+    radial-gradient(ellipse 850px 480px at 15% 0%, rgba(244,114,182,0.12), transparent),
+    radial-gradient(ellipse 700px 380px at 50% 100%, rgba(125,211,252,0.08), transparent),
+    #07060d; }
+[data-testid="stSidebar"] { background: linear-gradient(180deg, #171126 0%, #0b0913 100%); border-right: 1px solid rgba(168,85,247,0.25); }
+[data-testid="stSidebarNav"], [data-testid="stSidebarNav"] ul { padding-top: 0.2rem; }
 [data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label {
     position: relative;
     display: flex;
@@ -52,8 +58,8 @@ html, body, [class*="css"]  { font-family: 'Inter', sans-serif; }
     line-height: 1.2;
 }
 [data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:hover {
-    border-color: rgba(45,226,230,0.35);
-    background: rgba(45,226,230,0.08);
+    border-color: rgba(168,85,247,0.4);
+    background: rgba(168,85,247,0.08);
 }
 [data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label > div:first-child {
     display: none !important;
@@ -72,10 +78,10 @@ html, body, [class*="css"]  { font-family: 'Inter', sans-serif; }
     box-shadow: inset 0 0 0 2px rgba(7,11,24,0.35);
 }
 [data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) {
-    border-color: rgba(45,226,230,0.95);
-    background: linear-gradient(135deg, rgba(45,226,230,0.98) 0%, rgba(0,245,212,0.90) 100%);
-    box-shadow: 0 12px 28px rgba(45,226,230,0.22), inset 0 0 0 1px rgba(255,255,255,0.16);
-    color: #04131a;
+    border-color: rgba(168,85,247,0.96);
+    background: linear-gradient(135deg, rgba(168,85,247,0.96) 0%, rgba(244,114,182,0.92) 100%);
+    box-shadow: 0 12px 28px rgba(168,85,247,0.22), inset 0 0 0 1px rgba(255,255,255,0.16);
+    color: #140a1f;
 }
 [data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input:checked)::before {
     border-color: rgba(255,255,255,0.95);
@@ -94,50 +100,96 @@ html, body, [class*="css"]  { font-family: 'Inter', sans-serif; }
     background: #04131a;
 }
 [data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) * {
-    color: #04131a !important;
+    color: #140a1f !important;
 }
 h1,h2,h3 { font-family: 'Space Grotesk', sans-serif !important; }
-.eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.13em; color: #ff4d6d; text-transform: uppercase; margin-bottom: 2px;}
+.eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.13em; color: #c084fc; text-transform: uppercase; margin-bottom: 2px;}
 .subtext { color: #b5c3dd; font-size: 13.5px; max-width: 780px; }
-.hero-panel { background: linear-gradient(135deg, rgba(255,77,109,0.18), rgba(59,130,255,0.16)); border: 1px solid rgba(255,77,109,0.35); border-radius: 18px; padding: 20px 22px; margin-bottom: 16px; box-shadow: 0 0 0 1px rgba(45,226,230,0.1), 0 10px 28px rgba(255,45,85,0.12); }
-.info-card { background: linear-gradient(145deg, rgba(17,27,46,0.98), rgba(10,17,32,0.98)); border: 1px solid rgba(59,130,255,0.35); border-radius: 14px; padding: 16px 18px; margin-bottom: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 24px rgba(0,0,0,0.22); }
+.hero-panel { background: radial-gradient(circle at top left, rgba(168,85,247,0.22), transparent 35%), linear-gradient(135deg, rgba(24,18,38,0.98), rgba(12,11,20,0.98)); border: 1px solid rgba(168,85,247,0.3); border-radius: 24px; padding: 22px 24px; margin-bottom: 16px; box-shadow: 0 0 0 1px rgba(168,85,247,0.08), 0 18px 40px rgba(0,0,0,0.28); }
+.info-card { background: linear-gradient(145deg, rgba(29,23,41,0.98), rgba(14,12,21,0.98)); border: 1px solid rgba(168,85,247,0.22); border-radius: 16px; padding: 16px 18px; margin-bottom: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 24px rgba(0,0,0,0.22); }
 .stack-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
-.stack-card { background: linear-gradient(145deg, rgba(17,27,46,0.98), rgba(9,14,26,0.98)); border: 1px solid rgba(59,130,255,0.22); border-radius: 16px; padding: 16px 16px 14px; box-shadow: 0 10px 24px rgba(0,0,0,0.18); }
-.stack-card.primary { border-color: rgba(255,77,109,0.38); background: linear-gradient(145deg, rgba(255,77,109,0.10), rgba(9,14,26,0.98)); }
-.stack-card.backend { border-color: rgba(45,226,230,0.28); background: linear-gradient(145deg, rgba(45,226,230,0.08), rgba(9,14,26,0.98)); }
-.stack-card.data { border-color: rgba(139,92,255,0.28); background: linear-gradient(145deg, rgba(139,92,255,0.09), rgba(9,14,26,0.98)); }
+.stack-card { background: linear-gradient(145deg, rgba(29,23,41,0.98), rgba(13,11,21,0.98)); border: 1px solid rgba(168,85,247,0.18); border-radius: 18px; padding: 16px 16px 14px; box-shadow: 0 10px 24px rgba(0,0,0,0.18); }
+.stack-card.primary { border-color: rgba(168,85,247,0.38); background: linear-gradient(145deg, rgba(168,85,247,0.12), rgba(13,11,21,0.98)); }
+.stack-card.backend { border-color: rgba(244,114,182,0.28); background: linear-gradient(145deg, rgba(244,114,182,0.08), rgba(13,11,21,0.98)); }
+.stack-card.data { border-color: rgba(125,211,252,0.28); background: linear-gradient(145deg, rgba(125,211,252,0.09), rgba(13,11,21,0.98)); }
 .stack-title { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #9fb3d0; margin-bottom: 8px; }
 .stack-value { font-family: 'Space Grotesk', sans-serif; font-size: 20px; color: #f5f7fb; margin-bottom: 4px; }
 .stack-note { color: #b5c3dd; font-size: 13px; line-height: 1.45; }
-.login-card { background: rgba(6,11,24,0.96); border: 1px solid rgba(255,77,109,0.35); border-radius: 20px; padding: 28px; box-shadow: 0 20px 70px rgba(0,0,0,0.45), 0 0 30px rgba(59,130,255,0.16); }
-.user-pill { display:inline-block; padding:6px 10px; border-radius:999px; background:rgba(45,226,230,0.12); color:#acf6ff; border:1px solid rgba(45,226,230,0.25); font-size:12px; font-family:'IBM Plex Mono', monospace; }
+.login-card { background: rgba(8,8,14,0.96); border: 1px solid rgba(168,85,247,0.28); border-radius: 22px; padding: 28px; box-shadow: 0 20px 70px rgba(0,0,0,0.45), 0 0 30px rgba(168,85,247,0.12); }
+.user-pill { display:inline-block; padding:6px 10px; border-radius:999px; background:rgba(168,85,247,0.12); color:#e9d5ff; border:1px solid rgba(168,85,247,0.25); font-size:12px; font-family:'IBM Plex Mono', monospace; }
 .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-top: 10px; }
 .profile-item { padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); }
 .profile-label { display: block; font-family:'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #8fa4c3; margin-bottom: 3px; }
 .profile-value { font-size: 13px; color: #f5f7fb; font-weight: 600; }
-div[data-testid="stMetric"] { background: linear-gradient(145deg, rgba(17,27,46,0.98), rgba(13,22,40,0.98)); border: 1px solid rgba(59,130,255,0.28); border-left: 3px solid #ff4d6d; border-radius: 7px; padding: 12px 16px 8px; box-shadow: 0 8px 18px rgba(0,0,0,0.18); }
+div[data-testid="stMetric"] { background: linear-gradient(145deg, rgba(29,23,41,0.98), rgba(13,11,21,0.98)); border: 1px solid rgba(168,85,247,0.22); border-radius: 18px; padding: 14px 16px 10px; box-shadow: 0 8px 18px rgba(0,0,0,0.18); }
 div[data-testid="stMetricLabel"] { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing:0.05em; text-transform:uppercase; color:#9fb3d0; }
 .badge { display:inline-block; padding:3px 10px; border-radius:20px; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:500; border:1px solid; }
-.badge-critical{color:#ff5f7a;border-color:rgba(255,95,122,0.45);background:rgba(255,95,122,0.12);}
-.badge-high{color:#ffb347;border-color:rgba(255,179,71,0.45);background:rgba(255,179,71,0.12);}
-.badge-moderate{color:#58a6ff;border-color:rgba(88,166,255,0.45);background:rgba(88,166,255,0.12);}
-.badge-low{color:#2de2e6;border-color:rgba(45,226,230,0.35);background:rgba(45,226,230,0.12);}
-.mo-tag{display:inline-block;padding:2px 8px;margin:2px 4px 2px 0;border-radius:3px;background:#14213b;border:1px solid rgba(59,130,255,0.28);font-size:11px;color:#b5c3dd;font-family:'IBM Plex Mono',monospace;}
+.badge-critical{color:#ff8ba1;border-color:rgba(255,139,161,0.45);background:rgba(255,139,161,0.12);}
+.badge-high{color:#ffd08a;border-color:rgba(255,208,138,0.45);background:rgba(255,208,138,0.12);}
+.badge-moderate{color:#c4b5fd;border-color:rgba(196,181,253,0.45);background:rgba(196,181,253,0.12);}
+.badge-low{color:#86efac;border-color:rgba(134,239,172,0.35);background:rgba(134,239,172,0.12);}
+.mo-tag{display:inline-block;padding:2px 8px;margin:2px 4px 2px 0;border-radius:3px;background:#16111f;border:1px solid rgba(168,85,247,0.22);font-size:11px;color:#d8c9eb;font-family:'IBM Plex Mono',monospace;}
 .confidential { font-family:'IBM Plex Mono',monospace; font-size: 10px; color:#7688a6; letter-spacing:0.06em; }
-div.stButton > button { background: linear-gradient(90deg, #ff2d55 0%, #3b82ff 100%); color: white; border: none; border-radius: 999px; padding: 0.55rem 1rem; box-shadow: 0 6px 20px rgba(59,130,255,0.2); }
-div.stButton > button:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(255,45,85,0.25); }
-hr { border-color: rgba(255,77,109,0.25) !important; }
+div.stButton > button { background: linear-gradient(90deg, #a855f7 0%, #f472b6 100%); color: white; border: none; border-radius: 999px; padding: 0.55rem 1rem; box-shadow: 0 6px 20px rgba(168,85,247,0.2); }
+div.stButton > button:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(168,85,247,0.28); }
+hr { border-color: rgba(168,85,247,0.22) !important; }
+
+.dashboard-shell { display: grid; grid-template-columns: 88px minmax(0, 1fr) 300px; gap: 16px; align-items: start; margin: 18px 0 20px; }
+.rail-card, .panel-card, .activity-card { background: linear-gradient(180deg, rgba(28,22,38,0.98), rgba(14,12,22,0.98)); border: 1px solid rgba(168,85,247,0.18); border-radius: 24px; box-shadow: 0 20px 48px rgba(0,0,0,0.25); }
+.rail-card { padding: 18px 10px; display: flex; flex-direction: column; gap: 18px; align-items: center; position: sticky; top: 18px; }
+.rail-icon { width: 42px; height: 42px; border-radius: 999px; display: grid; place-items: center; color: #f5f3ff; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); font-size: 18px; }
+.rail-icon.active { background: linear-gradient(180deg, rgba(168,85,247,0.96), rgba(244,114,182,0.82)); border-color: rgba(255,255,255,0.12); color: #140a1f; box-shadow: 0 14px 28px rgba(168,85,247,0.25); }
+.dashboard-main { min-width: 0; }
+.dashboard-top-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+.hero-stat-card { background: linear-gradient(180deg, rgba(30,24,42,0.98), rgba(15,12,23,0.98)); border: 1px solid rgba(168,85,247,0.18); border-radius: 24px; padding: 18px 18px 16px; min-height: 140px; box-shadow: 0 16px 40px rgba(0,0,0,0.22); display: flex; flex-direction: column; justify-content: space-between; }
+.hero-stat-number { font-family: 'Space Grotesk', sans-serif; font-size: 38px; line-height: 1; color: #ffffff; letter-spacing: -0.04em; }
+.hero-stat-title { font-family: 'Space Grotesk', sans-serif; font-size: 18px; color: #f5f3ff; margin-top: 10px; }
+.hero-stat-sub { color: #b7aacd; font-size: 13px; margin-top: 10px; }
+.hero-stat-pill { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; border-radius: 999px; padding: 6px 10px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.04em; }
+.hero-stat-pill.good { background: rgba(134,239,172,0.12); color: #86efac; }
+.hero-stat-pill.warn { background: rgba(255,139,161,0.12); color: #ff8ba1; }
+.panel-card { padding: 18px; }
+.panel-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; margin-bottom: 14px; }
+.panel-title { font-family: 'Space Grotesk', sans-serif; font-size: 26px; color: #f7f2ff; margin: 0; }
+.panel-subtitle { color: #b8abcf; font-size: 13.5px; margin-top: 6px; max-width: 520px; }
+.panel-toolbar { display: flex; align-items: center; gap: 10px; color: #d8c9eb; font-size: 13px; }
+.panel-chip { padding: 7px 12px; border-radius: 999px; background: rgba(255,255,255,0.03); border: 1px solid rgba(168,85,247,0.18); color: #e9d5ff; }
+.activity-card { padding: 18px; }
+.activity-list { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.activity-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; background: rgba(0,0,0,0.3); border: 1px solid rgba(168,85,247,0.12); }
+.activity-label { color: #f4efff; font-size: 13px; }
+.activity-check { width: 22px; height: 22px; border-radius: 999px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,0.14); color: #f4efff; font-size: 12px; }
+.activity-check.on { background: linear-gradient(180deg, rgba(168,85,247,0.96), rgba(244,114,182,0.82)); border-color: transparent; color: #140a1f; }
+.activity-check.off { background: transparent; color: #9ca3af; }
+.promo-card { margin-top: 16px; padding: 18px; border-radius: 24px; background: linear-gradient(135deg, rgba(168,85,247,0.88), rgba(96,165,250,0.58)); color: #f8f5ff; position: relative; overflow: hidden; }
+.promo-card::after { content: ""; position: absolute; right: -18px; top: -18px; width: 120px; height: 120px; border-radius: 999px; background: rgba(255,255,255,0.12); }
+.promo-title { font-family: 'Space Grotesk', sans-serif; font-size: 18px; margin-bottom: 6px; }
+.promo-copy { color: rgba(248,245,255,0.82); font-size: 13px; line-height: 1.5; }
+.promo-button { margin-top: 18px; background: rgba(255,255,255,0.96); color: #15111f; border-radius: 999px; text-align: center; padding: 12px 16px; font-weight: 600; }
+.rail-footer { margin-top: auto; display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.rail-footer .rail-icon { width: 46px; height: 46px; }
+
+@media (max-width: 1200px) {
+    .dashboard-shell { grid-template-columns: 72px minmax(0, 1fr); }
+    .dashboard-side { grid-column: 1 / -1; }
+}
+
+@media (max-width: 900px) {
+    .dashboard-shell { grid-template-columns: 1fr; }
+    .rail-card { position: static; flex-direction: row; flex-wrap: wrap; justify-content: center; }
+    .dashboard-top-grid { grid-template-columns: 1fr; }
+}
 </style>
 """, unsafe_allow_html=True)
 
 
 def px_style(fig, height=380):
-    fig.update_layout(template=PLOTLY_TEMPLATE, paper_bgcolor="#111b2e", plot_bgcolor="#111b2e",
-                       font=dict(family="Inter, sans-serif", color="#c8d0e0", size=12),
+    fig.update_layout(template=PLOTLY_TEMPLATE, paper_bgcolor="#171126", plot_bgcolor="#171126",
+                       font=dict(family="Inter, sans-serif", color="#ddd6fe", size=12),
                        height=height, margin=dict(l=10, r=10, t=40, b=10),
                        legend=dict(bgcolor="rgba(0,0,0,0)"))
-    fig.update_xaxes(gridcolor="rgba(255,255,255,0.05)")
-    fig.update_yaxes(gridcolor="rgba(255,255,255,0.05)")
+    fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)")
+    fig.update_yaxes(gridcolor="rgba(255,255,255,0.06)")
     return fig
 
 
@@ -358,7 +410,9 @@ def build_excel_report(bundle):
     for row in bundle["summary_rows"].itertuples(index=False):
         ws.append(list(row))
     for cell in ws[1]:
-        cell.font = cell.font.copy(bold=True)
+            header_font = copy(cell.font)
+            header_font.bold = True
+            cell.font = header_font
 
     monthly_ws = wb.create_sheet("Monthly Crimes")
     monthly_ws.append(["Month", "Total Crimes"])
@@ -557,8 +611,8 @@ ddf, district_stations, heat_df, dmc = b.build_district_layer()
 
 # ---------------------------------------------------------------- SIDEBAR
 with st.sidebar:
-    st.markdown('<div class="eyebrow">Karnataka State Police &middot; SCRB</div>', unsafe_allow_html=True)
-    st.markdown("### 🕵️ Crime Intelligence Platform")
+    st.markdown('<div class="eyebrow">Karnataka State Police🚨 &middot; SCRB</div>', unsafe_allow_html=True)
+    st.markdown("### Crime Intelligence Platform⚖️")
     st.caption("Secure operations workspace")
     if st.session_state.authenticated:
                 st.markdown(f"<div class='user-pill'>👤 {st.session_state.current_user.upper()} · {st.session_state.user_role} · {st.session_state.police_grade}</div>", unsafe_allow_html=True)
@@ -599,13 +653,14 @@ with st.sidebar:
         "7 · Predictive Forecasting",
         "8 · Network & Link Analysis",
         "9 · MO Signature Matching",
-        "10 · Socio-Economic Overlay",
+        "10· Socio-Economic Overlay",
         "11 · Resource Deployment",
         "12 · Operations Command Center",
         "13 · Duplicate Complaint Detection",
         "14 · Crime Report Generator",
         "15 · KPI Dashboard",
         "16 · Data Quality Dashboard",
+        "17 · Dataset Agent Analysis",
     ], label_visibility="collapsed")
     st.markdown(
         """
@@ -649,25 +704,23 @@ if section_num == 1:
         st.markdown(
                 f"""
                 <div class="hero-panel">
-                    <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap;">
-                        <div>
-                            <div class="eyebrow">Crime Analysis Dashboard</div>
-                            <h1 style="margin: 4px 0 6px; font-size: 34px;">Statewide Intelligence Overview</h1>
-                            <div class="subtext">A command-room view for monitoring trends, hotspot pressure, anomaly spikes, and deployment priorities across Karnataka.</div>
-                        </div>
-                        <div class="info-card" style="min-width: 260px; margin: 0;">
-                            <div class="confidential">ACTIVE UNIT</div>
-                            <div style="font-size: 16px; color: #f4c575; margin-top: 4px;">{st.session_state.unit or 'SCRB Operations Desk'}</div>
-                            <div style="margin-top: 8px; color:#b5c3dd; font-size: 13px;">{meta['month_range']} · {meta['n_districts']} districts · {meta['n_categories']} categories</div>
-                            <div style="margin-top: 8px; color:#acf6ff; font-size: 13px; font-family:'IBM Plex Mono', monospace;">{st.session_state.police_grade or 'Police Grade N/A'} · {st.session_state.police_level or 'Level N/A'}</div>
-                        </div>
+            <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap;">
+            <div>
+                <div class="eyebrow">Crime Detection Dashboard</div>
+                <h1 style="margin: 4px 0 6px; font-size: 36px;">Detection Map & Command View</h1>
+                <div class="subtext">Monitor recent threats, active cases, and district pressure in a dark command-room layout inspired by the reference design.</div>
+            </div>
+            <div class="info-card" style="min-width: 260px; margin: 0;">
+                <div class="confidential">ACTIVE UNIT</div>
+                <div style="font-size: 16px; color: #e9d5ff; margin-top: 4px;">{st.session_state.unit or 'SCRB Operations Desk'}</div>
+                <div style="margin-top: 8px; color:#b5c3dd; font-size: 13px;">{meta['month_range']} · {meta['n_districts']} districts · {meta['n_categories']} categories</div>
+                <div style="margin-top: 8px; color:#86efac; font-size: 13px; font-family:'IBM Plex Mono', monospace;">{st.session_state.police_grade or 'Police Grade N/A'} · {st.session_state.police_level or 'Level N/A'}</div>
+            </div>
                     </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
         )
-
-        render_stack_view(meta)
 
         monthly = b.monthly_totals(df)
         recent3 = monthly["total"].tail(3).sum()
@@ -675,90 +728,147 @@ if section_num == 1:
         delta = (recent3 - prior3) / prior3 * 100 if prior3 else 0
         hotspot_count = int(ddf["is_hotspot"].sum())
         alert_count = len(b.zscore_anomalies(df))
+        filed_issues = len(st.session_state.get("filed_issues", []))
+        threat_score = alert_count + hotspot_count
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Records Logged", f"{meta['total_records']:,}", meta['month_range'])
-        c2.metric("Categories Tracked", meta['n_categories'], "Major crime heads")
-        c3.metric("Last-Quarter Momentum", f"{delta:+.1f}%", "vs preceding 3 months", delta_color="inverse")
-        c4.metric("Active Hotspot Districts", hotspot_count, "synthetic geo layer")
+        top_categories = b.top_categories(df, 8).reset_index()
+        top_categories.columns = ["category", "total"]
 
-        left_top, right_top = st.columns([1.45, 1])
-        with left_top:
-                st.subheader("Crime Trend")
-                fig = px.line(monthly, x="month", y="total", markers=True, template=PLOTLY_TEMPLATE)
-                fig.update_traces(line_color=AMBER, marker=dict(size=6), fillcolor="rgba(232,163,61,0.18)")
-                fig.update_layout(yaxis_title="Recorded crimes", xaxis_title="Month")
-                st.plotly_chart(px_style(fig, height=420), width='stretch')
-        with right_top:
-                st.subheader("Crime by Type")
-                top6 = b.top_categories(df, 6).reset_index()
-                top6.columns = ["category", "total"]
-                fig = px.pie(top6, names="category", values="total", hole=0.58,
-                                         color_discrete_sequence=[AMBER, BLUE, TEAL, VIOLET, RED, "#f4c575"])
-                fig.update_traces(textposition="inside", textinfo="percent+label", sort=False,
-                                                 marker=dict(line=dict(color="#0a111f", width=2)))
-                st.plotly_chart(px_style(fig, height=420), width='stretch')
-
+        main_col, side_col = st.columns([3.95, 1.25], gap="large")
+        with main_col:
+            top_left, top_mid, top_right = st.columns(3)
+            with top_left:
                 st.markdown(
-                        f"""
-                        <div class="info-card">
-                            <div class="eyebrow">Alerts in motion</div>
-                            <div style="font-size: 30px; color: #e8a33d; font-weight: 700;">{alert_count}</div>
-                            <div class="subtext">Statistical anomalies flagged this cycle.</div>
+                    f"""
+                    <div class="hero-stat-card">
+                        <div>
+                            <div class="hero-stat-number">{threat_score}</div>
+                            <div class="hero-stat-title">Threats detected</div>
+                            <div class="hero-stat-sub">{alert_count} anomalies + {hotspot_count} hotspot districts</div>
                         </div>
-                        """,
-                        unsafe_allow_html=True,
+                        <div class="hero-stat-pill warn">+ {delta:+.1f}% last quarter</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
                 )
-
-        left_bottom, right_bottom = st.columns([1.45, 1])
-        with left_bottom:
-                st.subheader("Geospatial Hotspots")
-                hotspot_view = ddf.sort_values("risk_score", ascending=False).head(22)
-                fig = px.scatter_geo(
-                        hotspot_view,
-                        lat="lat",
-                        lon="lng",
-                        size="recent_3mo",
-                        color="risk_band",
-                        hover_name="district",
-                        hover_data={"recent_3mo": ":.1f", "risk_score": ":.1f", "lat": False, "lng": False},
-                        projection="natural earth",
-                        color_discrete_map={"Critical": RED, "High": AMBER, "Moderate": BLUE, "Low": TEAL},
-                )
-                fig.update_geos(showland=True, landcolor="#111b2e", showocean=True, oceancolor="#07101f",
-                                                showcountries=False, showcoastlines=False, bgcolor="#111b2e")
-                fig.update_traces(marker=dict(line=dict(width=0.7, color="#07101f")))
-                st.plotly_chart(px_style(fig, height=440), width='stretch')
-        with right_bottom:
-                st.subheader("Priority Response Queue")
+            with top_mid:
                 st.markdown(
-                        f"""
-                        <div class="info-card">
-                            <div class="eyebrow">Deployment cue</div>
-                            <div style="font-size: 16px; color: #f0f4ff; margin-top: 4px;">Deploy additional patrols to high-risk urban districts and review hotspot clusters before the next shift handoff.</div>
+                    f"""
+                    <div class="hero-stat-card">
+                        <div>
+                            <div class="hero-stat-number">{filed_issues or 4}</div>
+                            <div class="hero-stat-title">New cases filed</div>
+                            <div class="hero-stat-sub">Agent tickets and data-quality reports opened this session</div>
                         </div>
-                        <div class="info-card">
-                            <div class="eyebrow">Active hotspots</div>
-                            <div style="font-size: 28px; color: #ff4d6d; font-weight: 700;">{hotspot_count}</div>
-                            <div class="subtext">Districts currently above the hotspot threshold.</div>
+                        <div class="hero-stat-pill good">Session log active</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            with top_right:
+                st.markdown(
+                    f"""
+                    <div class="hero-stat-card">
+                        <div>
+                            <div class="hero-stat-number">{hotspot_count}</div>
+                            <div class="hero-stat-title">Potential threats</div>
+                            <div class="hero-stat-sub">Districts currently above the hotspot threshold</div>
                         </div>
-                        """,
-                        unsafe_allow_html=True,
+                        <div class="hero-stat-pill warn">Command watch</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
                 )
 
-                st.subheader("Top District Pressure")
-                district_load = ddf.sort_values("risk_score", ascending=True).tail(8)
-                fig = px.bar(
-                        district_load,
-                        x="risk_score",
-                        y="district",
-                        orientation="h",
-                        color="risk_band",
-                        color_discrete_map={"Critical": RED, "High": AMBER, "Moderate": BLUE, "Low": TEAL},
-                        template=PLOTLY_TEMPLATE,
+            st.markdown(
+                """
+                <div class="panel-card" style="margin-top: 14px;">
+                    <div class="panel-head">
+                        <div>
+                            <div class="panel-title">Detection Map</div>
+                            <div class="panel-subtitle">Monitor and inspect all the crimes or potential threats in the map.</div>
+                        </div>
+                        <div class="panel-toolbar">
+                            <span class="panel-chip">Threats</span>
+                            <span class="panel-chip">Secured</span>
+                            <span class="panel-chip">Roads</span>
+                        </div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            show_area = st.selectbox("Show area", ["By Risk", "By Trend", "By District"], key="overview_show_area")
+
+            plot_df = ddf.sort_values("risk_score", ascending=False).head(18).copy()
+            if show_area == "By Trend":
+                fig = px.scatter_map(
+                    plot_df,
+                    lat="lat",
+                    lon="lng",
+                    size="recent_3mo",
+                    color="pct_change_vs_avg",
+                    hover_name="district",
+                    hover_data={"recent_3mo": ":.1f", "pct_change_vs_avg": ":.1f", "lat": False, "lng": False},
+                    color_continuous_scale=[[0, "#60a5fa"], [0.5, "#a855f7"], [1, "#f472b6"]],
+                    size_max=30,
+                    zoom=6,
+                    center={"lat": 15.3, "lon": 75.7},
                 )
-                fig.update_layout(showlegend=False, xaxis_title="Risk score", yaxis_title="")
-                st.plotly_chart(px_style(fig, height=300), width='stretch')
+            elif show_area == "By District":
+                plot_df["district_bucket"] = np.where(plot_df["is_hotspot"], "Threat", np.where(plot_df["pct_change_vs_avg"] > 0, "Watch", "Stable"))
+                fig = px.scatter_map(
+                    plot_df,
+                    lat="lat",
+                    lon="lng",
+                    size="recent_3mo",
+                    color="district_bucket",
+                    hover_name="district",
+                    hover_data={"recent_3mo": ":.1f", "risk_score": ":.1f", "lat": False, "lng": False},
+                    color_discrete_map={"Threat": "#f472b6", "Watch": "#a855f7", "Stable": "#86efac"},
+                    size_max=30,
+                    zoom=6,
+                    center={"lat": 15.3, "lon": 75.7},
+                )
+            else:
+                fig = px.scatter_map(
+                    plot_df,
+                    lat="lat",
+                    lon="lng",
+                    size="recent_3mo",
+                    color="risk_band",
+                    hover_name="district",
+                    hover_data={"recent_3mo": ":.1f", "risk_score": ":.1f", "lat": False, "lng": False},
+                    color_discrete_map={"Critical": "#ff5d6e", "High": "#ffb84d", "Moderate": "#a855f7", "Low": "#72e0b8"},
+                    size_max=30,
+                    zoom=6,
+                    center={"lat": 15.3, "lon": 75.7},
+                )
+            fig.update_layout(map_style="carto-darkmatter", margin=dict(l=0, r=0, t=0, b=0), height=540, paper_bgcolor="#171126", legend=dict(bgcolor="rgba(0,0,0,0)"))
+            st.plotly_chart(px_style(fig, height=540), width='stretch')
+
+        with side_col:
+            st.markdown(
+                """
+                <div class="activity-card">
+                    <div class="eyebrow">Activities</div>
+                    <div style="font-family:'Space Grotesk',sans-serif;font-size:22px;color:#f7f2ff;margin-top:4px;">Command activity</div>
+                    <div class="activity-list">
+                """,
+                unsafe_allow_html=True,
+            )
+            for i, row in enumerate(top_categories.itertuples(index=False)):
+                checked = i < 4
+                st.markdown(
+                    f"""
+                    <div class="activity-item">
+                        <div class="activity-label">{row.category}</div>
+                        <div class="activity-check {'on' if checked else 'off'}">{'✓' if checked else '○'}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            st.markdown("</div></div>", unsafe_allow_html=True)
 
         st.caption("Source: Karnataka crime register, Jan-2020 to Nov-2022. Geographic, network, and predictive layers elsewhere in this app are synthetic — see relevant tabs for detail.")
 
@@ -792,7 +902,7 @@ elif section_num == 2:
 elif section_num == 3:
     st.markdown('<div class="eyebrow">Situation Room / 03</div>', unsafe_allow_html=True)
     st.title("Geospatial Hotspots")
-    st.markdown('<div class="subtext">District-level drill-down with spatiotemporal clustering. <strong style="color:#e8a33d">District, station, and coordinate detail are synthetic</strong> — the source file carries no location field.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtext">District-level drill-down with spatiotemporal clustering. <strong style="color:#ff8a3d">District, station, and coordinate detail are synthetic</strong> — the source file carries no location field.</div>', unsafe_allow_html=True)
     st.write("")
 
     fcol1, fcol2, fcol3 = st.columns([1, 1, 1])
@@ -827,12 +937,12 @@ elif section_num == 3:
             plot_df = ddf.copy()
             plot_df["color"] = np.where(plot_df["is_hotspot"], "Hotspot",
                                   np.where(plot_df["pct_change_vs_avg"] > 5, "Elevated", "Stable"))
-            fig = px.scatter_mapbox(plot_df, lat="lat", lon="lng", size="total", color="color",
+            fig = px.scatter_map(plot_df, lat="lat", lon="lng", size="total", color="color",
                                      color_discrete_map={"Hotspot": RED, "Elevated": AMBER, "Stable": TEAL},
                                      hover_name="district",
                                      hover_data={"lat": False, "lng": False, "total": True, "pct_change_vs_avg": True},
                                      size_max=32, zoom=6, center={"lat": 15.3, "lon": 75.7})
-            fig.update_layout(mapbox_style="carto-darkmatter", margin=dict(l=0, r=0, t=0, b=0), height=540,
+            fig.update_layout(map_style="carto-darkmatter", margin=dict(l=0, r=0, t=0, b=0), height=540,
                                paper_bgcolor="#111b2e", legend=dict(bgcolor="rgba(0,0,0,0)"))
         st.plotly_chart(fig, width='stretch')
         st.caption("🔴 Hotspot (>25% vs trailing avg)  ·  🟠 Elevated  ·  🟢 Stable")
@@ -1000,7 +1110,7 @@ elif section_num == 7:
 elif section_num == 8:
     st.markdown('<div class="eyebrow">Situation Room / 08</div>', unsafe_allow_html=True)
     st.title("Network & Link Analysis")
-    st.markdown('<div class="subtext">Node-based view connecting suspects, victims, and recurring locations. <strong style="color:#e8a33d">Suspects/victims are synthetic</strong> (source file has no case-linkage data); MO tags are drawn from real registered minor-crime-head labels.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtext">Node-based view connecting suspects, victims, and recurring locations. <strong style="color:#ff8a3d">Suspects/victims are synthetic</strong> (source file has no case-linkage data); MO tags are drawn from real registered minor-crime-head labels.</div>', unsafe_allow_html=True)
     st.write("")
 
     net = b.build_network()
@@ -1096,7 +1206,7 @@ elif section_num == 9:
             <div style="padding:12px 16px;border:1px solid #243252;border-radius:5px;margin-bottom:8px;background:#111b2e;">
               <div style="display:flex;justify-content:space-between;">
                 <b>{m['suspect_a']}</b> ({m['district_a']}) &nbsp;↔&nbsp; <b>{m['suspect_b']}</b> ({m['district_b']})
-                <span style="font-family:'IBM Plex Mono',monospace;color:#e8a33d;">{m['n_shared']} shared MO tags</span>
+                <span style="font-family:'IBM Plex Mono',monospace;color:#ff9f7a;">{m['n_shared']} shared MO tags</span>
               </div>
               <div class="confidential" style="margin-top:6px;">Shared: {m['shared_mo']}</div>
             </div>
@@ -1110,7 +1220,7 @@ elif section_num == 9:
 elif section_num == 10:
     st.markdown('<div class="eyebrow">Situation Room / 10</div>', unsafe_allow_html=True)
     st.title("Socio-Economic Correlation Overlay")
-    st.markdown('<div class="subtext">Overlays crime rate against urbanization and literacy to explore the "why" behind the "where". <strong style="color:#e8a33d">Urbanization, literacy, and population figures are synthetic</strong> illustrative indices, not official Census/NCRB statistics.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtext">Overlays crime rate against urbanization and literacy to explore the "why" behind the "where". <strong style="color:#ff8a3d">Urbanization, literacy, and population figures are synthetic</strong> illustrative indices, not official Census/NCRB statistics.</div>', unsafe_allow_html=True)
     st.write("")
 
     socio = b.socioeconomic_table()
@@ -1207,7 +1317,7 @@ elif section_num == 12:
         st.markdown("""
         <div class="info-card">
           <div class="eyebrow">Incident queue</div>
-          <div style="font-size: 28px; color: #e8a33d; font-weight: 700;">12</div>
+          <div style="font-size: 28px; color: #ff8a3d; font-weight: 700;">12</div>
           <div class="subtext">Open cases awaiting supervisory review.</div>
         </div>
         """, unsafe_allow_html=True)
@@ -1458,3 +1568,160 @@ elif section_num == 16:
             st.markdown("**Filed issues**")
             st.dataframe(pd.DataFrame(st.session_state.filed_issues), width='stretch', hide_index=True)
         st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ============================================================
+# 17 · DATASET AGENT ANALYSIS
+# ============================================================
+elif section_num == 17:
+    st.markdown('<div class="eyebrow">Agent Desk / 17</div>', unsafe_allow_html=True)
+    st.title("Dataset Agent Analysis")
+    st.markdown('<div class="subtext">Choose a specific slice of the dataset, or upload a new CSV and analyze that file directly like an analyst. Use this when you want focused answers about one crime head, section, minor head, or month.</div>', unsafe_allow_html=True)
+    st.write("")
+
+    if "uploaded_dataset_df" not in st.session_state:
+        st.session_state.uploaded_dataset_df = None
+    if "uploaded_dataset_name" not in st.session_state:
+        st.session_state.uploaded_dataset_name = "Built-in Crime_Data.csv"
+    if "agent_analysis" not in st.session_state:
+        st.session_state.agent_analysis = b.analyze_dataset_slice(df, query="overall dataset overview")
+
+    uploaded_file = st.file_uploader("Upload a CSV dataset", type=["csv"], help="The file should include Complaint Number, Major Crime Head, Crime Head and Section, Minor Crime Head, Commits, and Month.")
+    if uploaded_file is not None:
+        try:
+            uploaded_df = pd.read_csv(uploaded_file)
+            uploaded_df = b.prepare_dataset_frame(uploaded_df)
+            st.session_state.uploaded_dataset_df = uploaded_df
+            st.session_state.uploaded_dataset_name = uploaded_file.name
+            st.success(f"Loaded dataset: {uploaded_file.name} ({len(uploaded_df):,} rows)")
+        except Exception as exc:
+            st.session_state.uploaded_dataset_df = None
+            st.error(f"Could not load the uploaded dataset: {exc}")
+
+    active_df = st.session_state.uploaded_dataset_df if st.session_state.uploaded_dataset_df is not None else df
+    st.markdown(
+        f"""
+        <div class="info-card" style="margin-top: 10px;">
+          <div class="confidential">ACTIVE DATASET</div>
+          <div style="font-size: 14px; color: #f5f7fb; margin-top: 4px;">{st.session_state.uploaded_dataset_name}</div>
+          <div style="margin-top: 6px; color: #b5c3dd; font-size: 13px;">Rows available: {len(active_df):,}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    major_options = ["All Major Crime Heads"] + sorted(active_df["Major Crime Head"].dropna().astype(str).unique().tolist())
+    section_options = ["All Sections"] + sorted(active_df["Crime Head and Section"].dropna().astype(str).unique().tolist())
+    minor_options = ["All Minor Crime Heads"] + sorted(active_df["Minor Crime Head"].dropna().astype(str).unique().tolist())
+    month_options = ["All Months"] + sorted(
+        active_df["Month"].dropna().astype(str).unique().tolist(),
+        key=lambda m: pd.to_datetime(m, format="%b-%y")
+    )
+
+    with st.form("agent_analysis_form"):
+        f1, f2, f3, f4 = st.columns(4)
+        major_pick = f1.selectbox("Major crime head", major_options)
+        section_pick = f2.selectbox("Crime section", section_options)
+        minor_pick = f3.selectbox("Minor crime head", minor_options)
+        month_pick = f4.selectbox("Month", month_options)
+        question = st.text_area(
+            "Ask the agent",
+            placeholder="Example: Why is this slice rising? Check for duplicates and section concentration.",
+        )
+        run_analysis = st.form_submit_button("Analyze slice", use_container_width=True)
+
+    if run_analysis:
+        st.session_state.agent_analysis = b.analyze_dataset_slice(
+            active_df,
+            major=major_pick,
+            section=section_pick,
+            minor=minor_pick,
+            month=month_pick,
+            query=question,
+        )
+
+    quick_actions = st.columns(2)
+    with quick_actions[0]:
+        if st.button("Analyze full active dataset", use_container_width=True):
+            st.session_state.agent_analysis = b.analyze_dataset_slice(active_df, query=question or "full dataset overview")
+            st.rerun()
+    with quick_actions[1]:
+        if st.button("Reset to built-in dataset", use_container_width=True):
+            st.session_state.uploaded_dataset_df = None
+            st.session_state.uploaded_dataset_name = "Built-in Crime_Data.csv"
+            st.session_state.agent_analysis = b.analyze_dataset_slice(df, query="overall dataset overview")
+            st.rerun()
+
+    result = st.session_state.agent_analysis
+    summary = result["summary"]
+
+    s1, s2, s3, s4 = st.columns(4)
+    s1.metric("Rows in slice", f"{summary['rows']:,}")
+    s2.metric("Commits", f"{summary['total_commits']:.1f}")
+    s3.metric("Peak month", summary["peak_month"], f"{summary['peak_month_total']:.1f}")
+    s4.metric("Trend", summary["trend_label"], f"{summary['recent_change_pct']:+.1f}%")
+
+    response_col, stats_col = st.columns([1.2, 0.8])
+    with response_col:
+        st.markdown(
+            f"""
+            <div class="info-card">
+              <div class="eyebrow">Agent response</div>
+              <div style="font-size: 15px; line-height: 1.6; color: #f5f7fb;">{result['response']}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if summary["duplicate_rows"]:
+            st.warning(f"This slice includes {summary['duplicate_rows']} rows tied to repeated complaint numbers.")
+
+        st.subheader("Key findings")
+        for item in result["key_findings"]:
+            st.markdown(f"- {item}")
+
+        st.subheader("Filtered records preview")
+        preview_cols = [col for col in ["Complaint Number", "Major Crime Head", "Crime Head and Section", "Minor Crime Head", "Commits", "Month"] if col in result["slice_df"].columns]
+        st.dataframe(result["slice_df"][preview_cols].head(120), width='stretch', height=320, hide_index=True)
+
+        st.download_button(
+            "Download filtered slice CSV",
+            result["slice_df"].to_csv(index=False).encode("utf-8"),
+            file_name="scrb_agent_slice.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    with stats_col:
+        st.subheader("Monthly trend")
+        if len(result["monthly_trend"]):
+            fig = px.line(result["monthly_trend"], x="month", y="total", markers=True, template=PLOTLY_TEMPLATE)
+            fig.update_traces(line_color=RED, marker=dict(size=6))
+            fig.update_layout(xaxis_title="Month", yaxis_title="Commits")
+            st.plotly_chart(px_style(fig, height=280), width='stretch')
+        else:
+            st.info("No monthly trend available for this slice.")
+
+        st.subheader("Top major heads")
+        if len(result["top_major"]):
+            fig = px.bar(result["top_major"], x="Total Commits", y="Major Crime Head", orientation="h", template=PLOTLY_TEMPLATE,
+                         color="Total Commits", color_continuous_scale=[[0, "#2a1320"], [1, RED]])
+            fig.update_layout(xaxis_title="Commits", yaxis_title="")
+            st.plotly_chart(px_style(fig, height=280), width='stretch')
+
+    lower_left, lower_right = st.columns(2)
+    with lower_left:
+        st.subheader("Top minor heads")
+        if len(result["top_minor"]):
+            fig = px.bar(result["top_minor"], x="Total Commits", y="Minor Crime Head", orientation="h", template=PLOTLY_TEMPLATE,
+                         color="Total Commits", color_continuous_scale=[[0, "#2a1320"], [1, AMBER]])
+            fig.update_layout(xaxis_title="Commits", yaxis_title="")
+            st.plotly_chart(px_style(fig, height=320), width='stretch')
+
+    with lower_right:
+        st.subheader("Top sections")
+        if len(result["top_sections"]):
+            fig = px.bar(result["top_sections"], x="Total Commits", y="Crime Head and Section", orientation="h", template=PLOTLY_TEMPLATE,
+                         color="Total Commits", color_continuous_scale=[[0, "#2a1320"], [1, VIOLET]])
+            fig.update_layout(xaxis_title="Commits", yaxis_title="")
+            st.plotly_chart(px_style(fig, height=320), width='stretch')

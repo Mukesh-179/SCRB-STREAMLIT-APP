@@ -55,6 +55,15 @@ LITERACY_PCT = {  # synthetic, for socio-economic overlay (feature 8)
 }
 DIST_NAMES = list(DISTRICTS.keys())
 
+REQUIRED_DATA_COLUMNS = [
+    "Complaint Number",
+    "Major Crime Head",
+    "Crime Head and Section",
+    "Minor Crime Head",
+    "Commits",
+    "Month",
+]
+
 
 def _clean(s):
     if pd.isna(s):
@@ -62,15 +71,30 @@ def _clean(s):
     return re.sub(r"\s+", " ", str(s)).strip()
 
 
+def prepare_dataset_frame(df):
+    missing = [column for column in REQUIRED_DATA_COLUMNS if column not in df.columns]
+    if missing:
+        raise ValueError("Missing required columns: " + ", ".join(missing))
+
+    prepared = df.copy()
+    for column in ["Complaint Number", "Major Crime Head", "Crime Head and Section", "Minor Crime Head", "Month"]:
+        prepared[column] = prepared[column].apply(_clean)
+
+    prepared["Commits"] = pd.to_numeric(prepared["Commits"], errors="coerce").fillna(0).astype(float)
+    prepared["MonthDate"] = pd.to_datetime(prepared["Month"], format="%b-%y", errors="coerce")
+    if prepared["MonthDate"].isna().any():
+        fallback = pd.to_datetime(prepared.loc[prepared["MonthDate"].isna(), "Month"], errors="coerce")
+        prepared.loc[prepared["MonthDate"].isna(), "MonthDate"] = fallback
+    if prepared["MonthDate"].isna().any():
+        raise ValueError("Unable to parse one or more Month values. Expected values like Jan-20 or Feb-22.")
+
+    return prepared.sort_values("MonthDate")
+
+
 @lru_cache(maxsize=1)
 def load_raw():
     df = pd.read_csv(DATA_PATH)
-    for c in ["Major Crime Head", "Crime Head and Section", "Minor Crime Head"]:
-        df[c] = df[c].apply(_clean)
-    df["Commits"] = df["Commits"].fillna(0).astype(float)
-    df["MonthDate"] = pd.to_datetime(df["Month"], format="%b-%y")
-    df = df.sort_values("MonthDate")
-    return df
+    return prepare_dataset_frame(df)
 
 
 def month_labels(df):
@@ -355,6 +379,139 @@ def meta_summary():
     return dict(total_records=len(df), total_commits=float(df["Commits"].sum()),
                 n_categories=df["Major Crime Head"].nunique(),
                 month_range=f"{labels[0]} to {labels[-1]}", n_months=len(labels), n_districts=len(DIST_NAMES))
+
+def analyze_dataset_slice(df, major=None, section=None, minor=None, month=None, query=""):
+    slice_df = df.copy()
+
+    if major and major != "All Major Crime Heads":
+        slice_df = slice_df[slice_df["Major Crime Head"] == major]
+    if section and section != "All Sections":
+        slice_df = slice_df[slice_df["Crime Head and Section"] == section]
+    if minor and minor != "All Minor Crime Heads":
+        slice_df = slice_df[slice_df["Minor Crime Head"] == minor]
+    if month and month != "All Months":
+        slice_df = slice_df[slice_df["Month"] == month]
+
+    if slice_df.empty:
+        return {
+            "slice_df": slice_df,
+            "summary": {
+                "rows": 0,
+                "total_commits": 0.0,
+                "complaints": 0,
+                "major_categories": 0,
+                "minor_categories": 0,
+                "sections": 0,
+                "duplicate_rows": 0,
+                "peak_month": "N/A",
+                "peak_month_total": 0.0,
+                "recent_change_pct": 0.0,
+                "trend_label": "No data",
+            },
+            "monthly_trend": pd.DataFrame(columns=["month", "total"]),
+            "top_major": pd.DataFrame(columns=["Major Crime Head", "Total Commits"]),
+            "top_minor": pd.DataFrame(columns=["Minor Crime Head", "Total Commits"]),
+            "top_sections": pd.DataFrame(columns=["Crime Head and Section", "Total Commits"]),
+            "key_findings": ["No rows matched the selected slice."],
+            "response": "No rows matched the selected filters. Try broadening the scope.",
+        }
+
+    monthly = slice_df.groupby("MonthDate")["Commits"].sum().sort_index()
+    monthly_trend = monthly.reset_index().rename(columns={"MonthDate": "month_dt", "Commits": "total"})
+    monthly_trend["month"] = monthly_trend["month_dt"].dt.strftime("%b-%y")
+    monthly_trend = monthly_trend[["month", "total"]]
+
+    top_major = (
+        slice_df.groupby("Major Crime Head")["Commits"].sum().sort_values(ascending=False).head(8).reset_index()
+        .rename(columns={"Commits": "Total Commits"})
+    )
+    top_minor = (
+        slice_df.groupby("Minor Crime Head")["Commits"].sum().sort_values(ascending=False).head(8).reset_index()
+        .rename(columns={"Commits": "Total Commits"})
+    )
+    top_sections = (
+        slice_df.groupby("Crime Head and Section")["Commits"].sum().sort_values(ascending=False).head(8).reset_index()
+        .rename(columns={"Commits": "Total Commits"})
+    )
+
+    duplicate_rows = int(slice_df["Complaint Number"].duplicated(keep=False).sum()) if "Complaint Number" in slice_df else 0
+    total_rows = int(len(slice_df))
+    total_commits = float(slice_df["Commits"].sum())
+    complaints = int(slice_df["Complaint Number"].nunique()) if "Complaint Number" in slice_df else total_rows
+    major_categories = int(slice_df["Major Crime Head"].nunique())
+    minor_categories = int(slice_df["Minor Crime Head"].nunique())
+    sections = int(slice_df["Crime Head and Section"].nunique())
+
+    if len(monthly_trend) >= 2:
+        recent_window = monthly_trend["total"].tail(3).sum()
+        prior_window = monthly_trend["total"].head(max(len(monthly_trend) - 3, 0)).tail(3).sum()
+        if prior_window > 0:
+            recent_change_pct = round(((recent_window - prior_window) / prior_window) * 100, 1)
+        else:
+            recent_change_pct = 0.0
+        trend_label = "Rising" if recent_change_pct > 0 else ("Falling" if recent_change_pct < 0 else "Flat")
+    else:
+        recent_change_pct = 0.0
+        trend_label = "Insufficient history"
+
+    peak_idx = monthly_trend["total"].idxmax()
+    peak_month = str(monthly_trend.loc[peak_idx, "month"])
+    peak_month_total = float(monthly_trend.loc[peak_idx, "total"])
+
+    query_text = str(query or "").lower()
+    key_findings = [
+        f"Slice rows: {total_rows} | complaints: {complaints} | commits: {total_commits:.1f}",
+        f"Top month: {peak_month} ({peak_month_total:.1f})",
+        f"Trend: {trend_label} ({recent_change_pct:+.1f}% recent change)",
+        f"Categories in slice: {major_categories} major, {minor_categories} minor, {sections} sections",
+    ]
+
+    if duplicate_rows:
+        key_findings.append(f"Duplicate complaint rows present: {duplicate_rows}")
+    if len(top_major):
+        key_findings.append(f"Dominant crime head: {top_major.iloc[0]['Major Crime Head']}")
+    if len(top_sections):
+        key_findings.append(f"Most active section: {top_sections.iloc[0]['Crime Head and Section']}")
+
+    response_bits = [
+        f"I inspected {total_rows} rows in the selected slice.",
+        f"The slice covers {major_categories} major heads, {minor_categories} minor heads, and {sections} sections.",
+        f"Activity peaks in {peak_month} with {peak_month_total:.1f} commits, and the short-term trend is {trend_label.lower()} ({recent_change_pct:+.1f}%).",
+    ]
+
+    if duplicate_rows:
+        response_bits.append(f"I found {duplicate_rows} rows tied to repeated complaint numbers, which is worth cleaning or reviewing.")
+    if "duplicate" in query_text or "quality" in query_text:
+        response_bits.append("You asked about quality signals, so I would prioritize repeated complaint numbers and any malformed section labels in this slice.")
+    if "trend" in query_text or "spike" in query_text:
+        response_bits.append(f"The strongest spike lands in {peak_month}; compare it against neighboring months to confirm whether it is a one-off surge or part of a sustained rise.")
+    if "section" in query_text:
+        response_bits.append("Section-level concentration is strongest in the top section table below.")
+    if "minor" in query_text:
+        response_bits.append("Minor-head concentration is shown in the top minor-head table below.")
+
+    return {
+        "slice_df": slice_df,
+        "summary": {
+            "rows": total_rows,
+            "total_commits": total_commits,
+            "complaints": complaints,
+            "major_categories": major_categories,
+            "minor_categories": minor_categories,
+            "sections": sections,
+            "duplicate_rows": duplicate_rows,
+            "peak_month": peak_month,
+            "peak_month_total": peak_month_total,
+            "recent_change_pct": recent_change_pct,
+            "trend_label": trend_label,
+        },
+        "monthly_trend": monthly_trend,
+        "top_major": top_major,
+        "top_minor": top_minor,
+        "top_sections": top_sections,
+        "key_findings": key_findings,
+        "response": " ".join(response_bits),
+    }
 
 
 def taxonomy_table(top_n=200):
