@@ -110,7 +110,6 @@ Required columns:
 
 👉 https://scrb-crime-analytics.onrender.com/
 
-👉 https://scrb-karnataka54.streamlit.app/ 
 
 
 ## 📸 Screenshots
